@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Carrefour Price/Weight Sorter",
+  "version": "1.0",
+  "description": "Ordina i prodotti per euro al chilo",
+  "icons": {
+    "256": "icon.png"
+  }, 
+  "content_scripts": [
+    {
+      "matches": ["*://www.carrefour.it/*", "*://carrefour.it/*"],
+      "js": [
+        "config.js",
+        "utils.js",
+        "ui.js",
+        "logic.js",
+        "main.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
