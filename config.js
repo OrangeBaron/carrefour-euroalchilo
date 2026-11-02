@@ -1,9 +1,6 @@
 // Inizializza il namespace globale
 window.CarrefourSorter = window.CarrefourSorter || {};
-
 window.CarrefourSorter.Config = {
-    BATCH_SIZE: 120,
-    DELAY_MS: 0,
     SELECTORS: {
         GRID: '.product-grid',
         ITEM: '.product-item',
