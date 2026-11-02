@@ -112,17 +112,27 @@ window.CarrefourSorter.Core = {
 
         // === FASE DI RECUPERO DATI ===
         if (expectedTotal > 0) {
-            const fetchPromises = [];
+            const concurrencyLimit = 5; 
+            const offsets = [];
             
             for (let start = 0; start < expectedTotal; start += batchSz) {
-                const url = getUrl(start);
-                fetchPromises.push(
-                    fetchWithRetry(url).then(text => {
-                        if (text) processHtml(text);
-                    })
-                );
+                offsets.push(start);
             }
-            await Promise.all(fetchPromises);
+
+            for (let i = 0; i < offsets.length; i += concurrencyLimit) {
+                const chunk = offsets.slice(i, i + concurrencyLimit);
+                
+                const fetchPromises = chunk.map(start => {
+                    const url = getUrl(start);
+                    return fetchWithRetry(url).then(text => {
+                        if (text) processHtml(text);
+                    });
+                });
+                
+                await Promise.all(fetchPromises);
+                
+                await new Promise(r => setTimeout(r, 200));
+            }
 
         } else {
             let start = 0;
