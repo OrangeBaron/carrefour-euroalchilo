@@ -55,5 +55,45 @@ window.CarrefourSorter.Utils = {
         if (unit === 'cl') value /= 100;
         
         return value;
+    },
+
+    /**
+     * Costruisce l'URL corretto per le chiamate in background,
+     * cercando prima l'API nativa e usando i metodi classici come fallback.
+     */
+    buildApiUrl: function(startPos, batchSz) {
+        // 1. Tenta prima di usare l'URL nativo
+        const footer = document.querySelector('.grid-footer');
+        if (footer && footer.hasAttribute('data-sort-options')) {
+            try {
+                const data = JSON.parse(footer.getAttribute('data-sort-options'));
+                const baseUrlNative = data.options[0].url; 
+                
+                const urlObj = new URL(baseUrlNative);
+                urlObj.searchParams.set('start', startPos);
+                urlObj.searchParams.set('sz', batchSz);
+                urlObj.searchParams.delete('srule'); 
+                
+                const storeId = this.getStoreId();
+                if (!urlObj.searchParams.has('storeId')) {
+                    urlObj.searchParams.set('storeId', storeId);
+                }
+                return urlObj.toString();
+            } catch (e) {
+                console.warn("Impossibile parsare l'URL nativo, uso il fallback.");
+            }
+        }
+
+        // 2. Fallback
+        const cgid = this.getCgid();
+        const searchQuery = this.getSearchQuery();
+        const storeId = this.getStoreId();
+        const baseUrl = `${window.location.origin}/on/demandware.store/Sites-carrefour-IT-Site/it_IT`;
+
+        if (searchQuery) {
+            return `${baseUrl}/FactFinder-Search?q=${searchQuery}&start=${startPos}&sz=${batchSz}&storeId=${storeId}&updateGrid=true`;
+        } else {
+            return `${baseUrl}/Search-UpdateGrid?cgid=${cgid}&start=${startPos}&sz=${batchSz}&storeId=${storeId}`;
+        }
     }
 };

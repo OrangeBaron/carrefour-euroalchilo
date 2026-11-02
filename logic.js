@@ -3,57 +3,43 @@ window.CarrefourSorter.Core = {
         const Config = window.CarrefourSorter.Config;
         const Utils = window.CarrefourSorter.Utils;
         const UI = window.CarrefourSorter.UI;
-        
+
         const batchSz = 10; 
-        
-        const cgid = Utils.getCgid();
-        const searchQuery = Utils.getSearchQuery();
-        const storeId = Utils.getStoreId();
-                 
-        if (!cgid && !searchQuery) {
+
+        if (!Utils.getCgid() && !Utils.getSearchQuery()) {
             alert("Vai in una categoria prodotti o effettua una ricerca per usare lo strumento.");
             return;
         }
-        
+                 
         let allProducts = [];
         let seenIds = new Set();
         let hasErrors = false;
-        
-        // 1. Recupera il totale esatto dalla pagina visibile
+
         let expectedTotal = 0;
         const countEl = document.querySelector('.results-count');
         if (countEl) {
             const match = countEl.textContent.replace(/\./g, '').match(/\d+/);
             if (match) expectedTotal = parseInt(match[0], 10);
         }
-        
-        // Pulisce l'interfaccia base
+
         const loaders = document.querySelectorAll(Config.SELECTORS.LOADER);
         loaders.forEach(l => l.style.display = 'none');
-                 
+                          
         const gridContainer = document.querySelector(Config.SELECTORS.GRID);
         if(gridContainer) gridContainer.classList.remove('js-search-content');
-        
+
         UI.updateStatus(false);
         UI.statusBox.innerText = expectedTotal > 0 ? `Caricamento... 0 / ${expectedTotal}` : 'Caricamento in corso...';
-        
-        const parser = new DOMParser(); 
-        const baseUrl = `${window.location.origin}/on/demandware.store/Sites-carrefour-IT-Site/it_IT`;
 
-        // Funzione per generare l'URL
-        const getUrl = (startPos) => {
-            if (searchQuery) {
-                return `${baseUrl}/FactFinder-Search?q=${searchQuery}&start=${startPos}&sz=${batchSz}&storeId=${storeId}&updateGrid=true`;
-            } else {
-                return `${baseUrl}/Search-UpdateGrid?cgid=${cgid}&start=${startPos}&sz=${batchSz}&storeId=${storeId}`;
-            }
-        };
+        const parser = new DOMParser(); 
+
+        const getUrl = (startPos) => Utils.buildApiUrl(startPos, batchSz);
 
         // Funzione di utilità per parsare l'HTML e aggiornare l'array
         const processHtml = (text) => {
             const doc = parser.parseFromString(text, 'text/html');
             const tiles = doc.querySelectorAll(Config.SELECTORS.ITEM);
-            
+
             tiles.forEach(tile => {
                 let jsonEl = tile.tagName === 'ARTICLE' ? tile : tile.querySelector('article');
                 let jsonAttr = null;
@@ -63,9 +49,9 @@ window.CarrefourSorter.Core = {
                 } else if (tile.hasAttribute('data-product-json')) {
                     jsonAttr = tile.getAttribute('data-product-json');
                 }
-                
+
                 if (!jsonAttr) return;
-                
+
                 try {
                     const data = JSON.parse(jsonAttr);
                     if (!seenIds.has(data.id)) {
@@ -114,25 +100,43 @@ window.CarrefourSorter.Core = {
         if (expectedTotal > 0) {
             const concurrencyLimit = 5; 
             const offsets = [];
-            
+
             for (let start = 0; start < expectedTotal; start += batchSz) {
                 offsets.push(start);
             }
 
-            for (let i = 0; i < offsets.length; i += concurrencyLimit) {
-                const chunk = offsets.slice(i, i + concurrencyLimit);
-                
-                const fetchPromises = chunk.map(start => {
-                    const url = getUrl(start);
-                    return fetchWithRetry(url).then(text => {
-                        if (text) processHtml(text);
-                    });
-                });
-                
-                await Promise.all(fetchPromises);
-                
-                await new Promise(r => setTimeout(r, 200));
-            }
+            let activeRequests = 0;
+            let currentIndex = 0;
+
+            await new Promise((resolve) => {
+                const processNext = () => {
+                    if (currentIndex >= offsets.length && activeRequests === 0) {
+                        resolve();
+                        return;
+                    }
+
+                    while (activeRequests < concurrencyLimit && currentIndex < offsets.length) {
+                        const start = offsets[currentIndex];
+                        currentIndex++;
+                        activeRequests++;
+
+                        const url = getUrl(start);
+                        
+                        fetchWithRetry(url)
+                            .then(text => {
+                                if (text) processHtml(text);
+                            })
+                            .finally(() => {
+                                activeRequests--;
+                                processNext(); 
+                            });
+                    }
+                };
+
+                processNext(); 
+            });
+
+            await new Promise(r => setTimeout(r, 200));
 
         } else {
             let start = 0;
@@ -144,7 +148,7 @@ window.CarrefourSorter.Core = {
                 if (text) {
                     const doc = parser.parseFromString(text, 'text/html');
                     const tiles = doc.querySelectorAll(Config.SELECTORS.ITEM);
-                    
+
                     if (tiles.length === 0) {
                         keepFetching = false;
                     } else {
@@ -163,7 +167,7 @@ window.CarrefourSorter.Core = {
         if (gridContainer && allProducts.length > 0) {
             gridContainer.innerHTML = '';
             const fragment = document.createDocumentFragment();
-                         
+
             allProducts.forEach(p => {
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = p.html;
@@ -174,7 +178,7 @@ window.CarrefourSorter.Core = {
                 }
                 if(productNode) fragment.appendChild(productNode);
             });
-                         
+
             gridContainer.appendChild(fragment);
         } else if (!hasErrors && allProducts.length === 0) {
             alert("Nessun prodotto trovato. Assicurati di essere in una pagina valida.");
