@@ -17,5 +17,5 @@
     // Check iniziale
     UI.injectSortOption();
     
-    console.log("Carrefour Sorter Refactored loaded.");
+    console.log("Carrefour Sorter loaded.");
 })();
